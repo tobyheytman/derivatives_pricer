@@ -1,15 +1,12 @@
 import numpy as np
-from typing import Final, Tuple
+from typing import Final
 from dataclasses import dataclass
 
-from derivatives_pricer.domain.enums import ExerciseStyle
 from derivatives_pricer.domain.interfaces import ValuationInstrument
 from derivatives_pricer.domain.market import MarketState
 from derivatives_pricer.engines.interface import PricingEngine
 from derivatives_pricer.common.validation import validate_positive
 from derivatives_pricer.instruments.options import VanillaOption
-
-# --- 1. Parameterization Strategy ---
 
 @dataclass(frozen=True)
 class BinomialParams:
@@ -33,8 +30,6 @@ class BinomialParameterizer:
         
         return BinomialParams(u, d, p, df)
 
-# --- 2. The Lattice State ---
-
 class BinomialLattice:
     def __init__(self, market: MarketState, params: BinomialParams, steps: int):
         self._market = market
@@ -51,28 +46,21 @@ class BinomialLattice:
     def backward_induction_step(self, 
                                 current_values: np.ndarray, 
                                 instrument: VanillaOption) -> np.ndarray:
-        """
-        Perform one backward step.
-        Relies on the Instrument's Exercise Strategy to determine node value.
-        """
-        # 1. Calculate Continuation Value (Expectation under Q)
+        # Continuation
         continuation = self._params.df * (
             self._params.p * current_values[:-1] + 
             (1 - self._params.p) * current_values[1:]
         )
         
-        # 2. Update Spot Prices for current step (for intrinsic calculation)
-        # S_{i} at time k = S_{i} at time k+1 / u
+        # Spot update
         self._spot_prices = self._spot_prices[:-1] / self._params.u
         
-        # 3. Calculate Intrinsic Value
+        # Intrinsic
+        # NOTE: Payoff strategy expects paths. `spot_prices` is 1D array of terminal prices (nodes).
+        # We can pass it directly as 1D array. The Payoff strategy (Vanilla) handles this.
         intrinsic = instrument.calculate_payoff(self._spot_prices)
         
-        # 4. Delegate to Exercise Strategy (Polymorphism)
-        # "Should I exercise or hold?" -> Strategy decides.
         return instrument.apply_exercise_condition(intrinsic, continuation)
-
-# --- 3. The Orchestrator Engine ---
 
 class BinomialPricingEngine(PricingEngine):
     
@@ -81,32 +69,26 @@ class BinomialPricingEngine(PricingEngine):
         self._steps: Final[int] = step_count
 
     def price(self, instrument: ValuationInstrument, market_state: MarketState) -> float:
-        # TODO: Engine interface uses base ValuationInstrument, 
-        # but Binomial specifically needs `apply_exercise_condition`.
-        # Ideally, `ValuationInstrument` has `apply_exercise_condition`.
-        # For now, explicit check or cast for VanillaOption since typically Lattice implies Vanilla/American.
         if not isinstance(instrument, VanillaOption):
              raise TypeError("BinomialEngine currently requires VanillaOption (composed)")
 
-        # 1. Params
         params = BinomialParameterizer.calculate(
             market_state, 
             instrument.expiration_time, 
             self._steps
         )
         
-        # 2. Lattice
         lattice = BinomialLattice(
             market_state, 
             params, 
             self._steps
         )
         
-        # 3. Terminal Condition
-        # We need the spots at maturity first.
+        # Terminal Values
+        # Pass 1D array of spots.
         values = instrument.calculate_payoff(lattice._spot_prices)
         
-        # 4. Rollback
+        # Rollback
         for _ in range(self._steps):
             values = lattice.backward_induction_step(values, instrument)
             

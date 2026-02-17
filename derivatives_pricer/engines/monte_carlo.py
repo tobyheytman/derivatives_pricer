@@ -9,7 +9,7 @@ from derivatives_pricer.common.validation import validate_positive
 
 class StochasticProcess(ABC):
     @abstractmethod
-    def simulate_terminal_prices(self, T: float, steps: int, paths: int) -> np.ndarray:
+    def simulate_paths(self, T: float, steps: int, paths: int) -> np.ndarray:
         pass
 
 class GeometricBrownianMotion(StochasticProcess):
@@ -19,13 +19,28 @@ class GeometricBrownianMotion(StochasticProcess):
         self._q = market.dividend_yield
         self._sigma = market.volatility
 
-    def simulate_terminal_prices(self, T: float, steps: int, paths: int) -> np.ndarray:
+    def simulate_paths(self, T: float, steps: int, paths: int) -> np.ndarray:
+        """Returns full path matrix [steps, paths]"""
         dt = T / steps
         drift = (self._r - self._q - 0.5 * self._sigma**2) * dt
         diffusion = self._sigma * np.sqrt(dt)
+        
+        # Paths including S0?
+        # Standard MC often just needs steps.
+        # [0] = S0
+        # [1] = S0 * exp(...)
+        
         Z = np.random.standard_normal((steps, paths))
-        total_log_return = np.sum(drift + diffusion * Z, axis=0)
-        return self._S0 * np.exp(total_log_return)
+        log_returns = drift + diffusion * Z
+        
+        # Cumulative Sum for paths
+        cumulative_log_returns = np.cumsum(log_returns, axis=0)
+        
+        # Broadcast S0
+        # prices[i] = S0 * exp(cum_ret[i])
+        prices = self._S0 * np.exp(cumulative_log_returns)
+        
+        return prices
 
 class MonteCarloEngine(PricingEngine):
     
@@ -38,12 +53,16 @@ class MonteCarloEngine(PricingEngine):
     def price(self, instrument: ValuationInstrument, market_state: MarketState) -> float:
         process = GeometricBrownianMotion(market_state)
         
-        final_prices = process.simulate_terminal_prices(
+        # Get full paths [steps x paths]
+        paths = process.simulate_paths(
             T=instrument.expiration_time,
             steps=self._num_steps,
             paths=self._num_paths
         )
         
-        payoffs = instrument.calculate_payoff(final_prices)
+        # Pass paths to instrument.
+        # Instrument strategy handles 1D vs 2D.
+        payoffs = instrument.calculate_payoff(paths)
+        
         discount_factor = np.exp(-market_state.risk_free_rate * instrument.expiration_time)
         return float(np.mean(payoffs) * discount_factor)
