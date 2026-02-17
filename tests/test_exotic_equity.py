@@ -9,8 +9,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from derivatives_pricer.core.types import OptionType, ExerciseStyle, BarrierType
 from derivatives_pricer.core.market_data import MarketData
 from derivatives_pricer.instruments.equity import EquityVanillaOption, EquityBarrierOption, EquityAsianOption
-from derivatives_pricer.models.monte_carlo import MonteCarloModel
-from derivatives_pricer.models.black_scholes import BlackScholesModel
+from derivatives_pricer.engines.monte_carlo import MonteCarloEngine
+from derivatives_pricer.engines.black_scholes import BlackScholesEngine
 
 def test_monte_carlo_vanilla_convergence():
     """Verify MC converges to BS for vanilla options."""
@@ -32,11 +32,11 @@ def test_monte_carlo_vanilla_convergence():
         option_type=OptionType.CALL
     )
 
-    bs_model = BlackScholesModel()
-    bs_price = bs_model.price(option, market_data)
+    bs_engine = BlackScholesEngine(market_data)
+    bs_price = bs_engine.price(option)
     
-    mc_model = MonteCarloModel(num_paths=50000, num_steps=100)
-    mc_price = mc_model.price(option, market_data)
+    mc_engine = MonteCarloEngine(market_data, num_paths=50000, num_steps=100)
+    mc_price = mc_engine.price(option)
     
     print(f"BS Price: {bs_price:.4f}")
     print(f"MC Price: {mc_price:.4f}")
@@ -58,9 +58,6 @@ def test_barrier_option_up_and_out():
         volatilities={"AAPL": 0.2}
     )
 
-    # Barrier at 120. If price hits 120, option becomes worthless.
-    # Strike 100. Spot 100.
-    # This should be cheaper than vanilla call.
     option = EquityBarrierOption(
         asset_name="AAPL",
         strike=100.0,
@@ -70,12 +67,12 @@ def test_barrier_option_up_and_out():
         barrier_type=BarrierType.UP_AND_OUT
     )
 
-    mc_model = MonteCarloModel(num_paths=50000, num_steps=100)
-    price = mc_model.price(option, market_data)
+    mc_engine = MonteCarloEngine(market_data, num_paths=50000, num_steps=100)
+    price = mc_engine.price(option)
     
-    bs_price = BlackScholesModel().price(
-        EquityVanillaOption("AAPL", 100.0, expiry_date, OptionType.CALL),
-        market_data
+    bs_engine = BlackScholesEngine(market_data)
+    bs_price = bs_engine.price(
+        EquityVanillaOption("AAPL", 100.0, expiry_date, OptionType.CALL)
     )
     
     print(f"Vanilla Price: {bs_price:.4f}")
@@ -98,7 +95,6 @@ def test_asian_option_average():
         volatilities={"AAPL": 0.2}
     )
 
-    # Asian option volatility is generally lower than vanilla, so price should be lower for ATM call.
     option = EquityAsianOption(
         asset_name="AAPL",
         strike=100.0,
@@ -106,12 +102,12 @@ def test_asian_option_average():
         option_type=OptionType.CALL
     )
 
-    mc_model = MonteCarloModel(num_paths=50000, num_steps=100)
-    price = mc_model.price(option, market_data)
+    mc_engine = MonteCarloEngine(market_data, num_paths=50000, num_steps=100)
+    price = mc_engine.price(option)
     
-    bs_price = BlackScholesModel().price(
-        EquityVanillaOption("AAPL", 100.0, expiry_date, OptionType.CALL),
-        market_data
+    bs_engine = BlackScholesEngine(market_data)
+    bs_price = bs_engine.price(
+        EquityVanillaOption("AAPL", 100.0, expiry_date, OptionType.CALL)
     )
     
     print(f"Vanilla Price: {bs_price:.4f}")
@@ -119,6 +115,7 @@ def test_asian_option_average():
     
     assert price < bs_price
     print("Asian Test Passed")
+
 
 if __name__ == "__main__":
     test_monte_carlo_vanilla_convergence()

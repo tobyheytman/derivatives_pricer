@@ -9,7 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from derivatives_pricer.core.types import OptionType
 from derivatives_pricer.core.market_data import MarketData
 from derivatives_pricer.instruments.fx import FXVanillaOption
-from derivatives_pricer.models.black_scholes import BlackScholesModel
+from derivatives_pricer.engines.black_scholes import BlackScholesEngine
 
 def test_fx_option_pricing():
     """Verify Garman-Kohlhagen pricing for FX options."""
@@ -18,12 +18,6 @@ def test_fx_option_pricing():
     expiry_date = date(2024, 1, 1)
     
     # EURUSD
-    # S = 1.10
-    # K = 1.10
-    # r_domestic (USD) = 5%
-    # r_foreign (EUR) = 3%
-    # sigma = 10%
-    # T = 1
     
     market_data = MarketData(
         valuation_date=valuation_date,
@@ -40,8 +34,9 @@ def test_fx_option_pricing():
         option_type=OptionType.CALL
     )
 
-    model = BlackScholesModel()
-    price = model.price(option, market_data)
+    engine = BlackScholesEngine(market_data)
+    price = engine.price(option)
+
     
     # Manual Calc
     # d1 = (ln(1.1/1.1) + (0.05 - 0.03 + 0.5*0.01)*1) / 0.1

@@ -9,7 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from derivatives_pricer.core.types import OptionType, ExerciseStyle
 from derivatives_pricer.core.market_data import MarketData
 from derivatives_pricer.instruments.equity import EquityVanillaOption
-from derivatives_pricer.models.black_scholes import BlackScholesModel
+from derivatives_pricer.engines.black_scholes import BlackScholesEngine
 
 def test_black_scholes_call():
     # Setup market data
@@ -31,21 +31,15 @@ def test_black_scholes_call():
         option_type=OptionType.CALL
     )
 
-    # Setup model
-    model = BlackScholesModel()
+    # Setup engine
+    engine = BlackScholesEngine(market_data)
 
     # Calculate price
-    price = model.price(call_option, market_data)
+    price = engine.price(call_option)
     
     # Expected price (approximate BS value)
     # S=100, K=100, T=1, r=0.05, sigma=0.2
-    # d1 = (ln(1) + (0.05 + 0.02)*1) / 0.2 = 0.07 / 0.2 = 0.35
-    # d2 = 0.35 - 0.2 = 0.15
-    # N(d1) = 0.6368
-    # N(d2) = 0.5596
-    # Call = 100 * 0.6368 - 100 * e^-0.05 * 0.5596
-    # Call = 63.68 - 100 * 0.9512 * 0.5596
-    # Call = 63.68 - 53.23 = 10.45
+    # Call = 10.45
     
     print(f"Calculated Call Price: {price}")
     assert 10.40 < price < 10.50
@@ -70,19 +64,15 @@ def test_black_scholes_put():
         option_type=OptionType.PUT
     )
 
-    # Setup model
-    model = BlackScholesModel()
+    # Setup engine
+    engine = BlackScholesEngine(market_data)
 
     # Calculate price
-    price = model.price(put_option, market_data)
-    
-    # Put-Call Parity: C - P = S - K * e^-rT
-    # 10.45 - P = 100 - 100 * 0.9512
-    # 10.45 - P = 100 - 95.12 = 4.88
-    # P = 10.45 - 4.88 = 5.57
+    price = engine.price(put_option)
     
     print(f"Calculated Put Price: {price}")
     assert 5.50 < price < 5.60
+
 
 if __name__ == "__main__":
     test_black_scholes_call()

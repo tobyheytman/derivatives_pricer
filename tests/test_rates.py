@@ -9,7 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from derivatives_pricer.core.types import YearFraction
 from derivatives_pricer.core.market_data import MarketData
 from derivatives_pricer.instruments.rates import InterestRateSwap
-from derivatives_pricer.models.dcf import DCFPricer
+from derivatives_pricer.engines.discounting import DiscountingEngine
 from derivatives_pricer.data.curves import ConstantYieldCurve
 
 def test_swap_pricing():
@@ -28,15 +28,6 @@ def test_swap_pricing():
     )
 
     # 1. Par Swap Test
-    # If fixed rate = swap rate (approx equal to curve rate for flat curve), PV should be near zero.
-    # For annual payment, swap rate with continuous compounding r:
-    # Par rate = (1 - df(T)) / sum(df(ti)*dt)
-    # With r=5%, T=1.
-    # df(1) = exp(-0.05) = 0.9512
-    # Floating Leg PV = Notional * (1 - 0.9512) = Notional * 0.0488 (approx)
-    # Fixed Leg PV = Notional * K * sum(df*dt)
-    
-    # Let's just test that payer swap has negative value if fixed rate > market rate
     
     swap_high_rate = InterestRateSwap(
         notional=1_000_000,
@@ -47,8 +38,8 @@ def test_swap_pricing():
         payer=True
     )
     
-    pricer = DCFPricer()
-    pv_high = pricer.price(swap_high_rate, market_data)
+    engine = DiscountingEngine(market_data)
+    pv_high = engine.price(swap_high_rate)
     
     print(f"PV (Pay 6%, Market 5%): {pv_high:.2f}")
     assert pv_high < 0.0 # We pay more than we receive
@@ -63,9 +54,10 @@ def test_swap_pricing():
         payer=False # Receive fixed
     )
     
-    pv_receiver = pricer.price(swap_receiver, market_data)
+    pv_receiver = engine.price(swap_receiver)
     print(f"PV (Receive 6%, Market 5%): {pv_receiver:.2f}")
     assert pv_receiver > 0.0
+
     
     # Check symmetry
     assert abs(pv_high + pv_receiver) < 1e-5
